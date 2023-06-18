@@ -4,8 +4,11 @@ const { Configuration, OpenAIApi } = require("openai");
 const fetch = require('node-fetch');
 require('dotenv').config();
 
+const dataDir = fs.existsSync('/data') ? '/data': './data';
+const rootDir = fs.existsSync('/data') ? '/' : '.';
+
 // Create emoji cache directory if it doesn't exist
-const emojiCacheDir = './cache/emojis';
+const emojiCacheDir = dataDir + '/cache/emojis';
 if (!fs.existsSync(emojiCacheDir)) {
   fs.mkdirSync(emojiCacheDir, { recursive: true });
 }
@@ -52,6 +55,8 @@ if (!fs.existsSync(emojiCacheDir)) {
     );
   });
 
+  app.use(express.static('static'));
+
   app.get('/emoji/:name', async (req, res) => {
     const name = req.params.name;
 
@@ -62,7 +67,7 @@ if (!fs.existsSync(emojiCacheDir)) {
     const emojiCachePath = `${emojiCacheDir}/${name}.txt`;
     if (fs.existsSync(emojiCachePath)) {
       console.log('Emoji found in cache:', name);
-      return res.sendFile(emojiCachePath, { root: '.' });
+      return res.sendFile(emojiCachePath, { root: rootDir });
     }
 
     // Query GPT-4
