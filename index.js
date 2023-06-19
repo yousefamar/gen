@@ -57,6 +57,8 @@ if (!fs.existsSync(emojiCacheDir)) {
 
   app.use(express.static('static'));
 
+  app.use('/world', require('./routes/world'));
+
   app.get('/emoji/:name', async (req, res) => {
     const name = req.params.name;
 
