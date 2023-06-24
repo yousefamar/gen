@@ -9,15 +9,17 @@ const openai = new OpenAIApi(configuration);
 
 const dataDir = fs.existsSync('/data') ? '/data': './data';
 
-const NPCfunctions = [
-  {
+const NPCfunctionsMap = {
+  doNothing: {
     name: "doNothing",
     description: "Do nothing",
     parameters: {
       type: "object",
       properties: {},
     },
-  }, {
+  },
+
+  remember: {
     name: "remember",
     description: "Add facts about people to your long-term memory",
     parameters: {
@@ -30,35 +32,45 @@ const NPCfunctions = [
       },
       required: [ "fact" ],
     },
-  }, {
+  },
+  
+  stepForward: {
     name: "stepForward",
     description: "Step one cell forward (minus Y)",
     parameters: {
       type: "object",
       properties: {},
     },
-  }, {
+  },
+  
+  stepBackward: {
     name: "stepBackward",
     description: "Step one cell back (plus Y)",
     parameters: {
       type: "object",
       properties: {},
     },
-  }, {
+  },
+  
+  stepLeft: {
     name: "stepLeft",
     description: "Step one cell to the left (minus X)",
     parameters: {
       type: "object",
       properties: {},
     },
-  }, {
+  },
+  
+  stepRight: {
     name: "stepRight",
     description: "Step one cell to the right (plus X)",
     parameters: {
       type: "object",
       properties: {},
     },
-  }, {
+  },
+  
+  say: {
     name: "say",
     description: "Say something short (one sentence)",
     parameters: {
@@ -72,19 +84,25 @@ const NPCfunctions = [
       required: [ "text" ],
     },
   },
-];
+};
 
-const prompt = async (prompt) => {
+const prompt = async (prompt, functions) => {
+  console.log('Prompting GPT-3:\n----------------\n' + prompt);
+
   let completion;
-  try {
-    completion = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo-0613",
-      messages: [{ role: "user", content: prompt }],
-      functions: NPCfunctions,
-    });
-  } catch (e) {
-    console.log(e.response.data.error.message);
-    return;
+  while (true) {
+    try {
+      completion = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo-0613",
+        messages: [{ role: "user", content: prompt }],
+        functions,
+      });
+      break;
+    } catch (e) {
+      console.log(e.response.data.error.message);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      //return;
+    }
   }
 
   const { function_call } = completion.data.choices[0].message;
@@ -95,7 +113,16 @@ const prompt = async (prompt) => {
       arguments: {},
     };
 
-  function_call.arguments = JSON.parse(function_call.arguments);
+  try {
+    function_call.arguments = JSON.parse(function_call.arguments);
+  } catch (error) {
+    console.error('Error parsing arguments: ' + error);
+    console.log(function_call.arguments);
+    return {
+      name: 'doNothing',
+      arguments: {},
+    };
+  }
 
   return function_call;
 };
@@ -159,6 +186,9 @@ class World {
   async tick() {
     const entities = this.cells.flat().filter(cell => cell);
 
+    for (const entity of entities)
+      await entity.preTick();
+
     const events = [];
     for (const entity of entities) {
       const event = await entity.tick();
@@ -197,6 +227,8 @@ class Entity {
     this.y = y;
   }
 
+  preTick() {}
+
   tick() {}
 
   setPosition(x, y) {
@@ -229,6 +261,11 @@ class NPC extends Entity {
     super(world, label, string, x, y);
   }
 
+  async preTick() {
+    this.metadata.speechPrev = this.metadata.speechCurr;
+    this.metadata.speechCurr = null;
+  }
+
   async tick() {
 
     const formattedCoordinates = ``;
@@ -241,41 +278,80 @@ class NPC extends Entity {
       formattedMemory += '\n';
     }
 
-    const surroundings = [
+    const surroundingEntities = [
       this.world.cells[this.y - 1][this.x],
       this.world.cells[this.y + 1][this.x],
       this.world.cells[this.y][this.x - 1],
       this.world.cells[this.y][this.x + 1],
-    ].map(cell => cell ? cell.toString() : 'nothing');
+    ];
+    const surroundings = surroundingEntities.map(cell => cell ? cell.toString() : 'nothing');
+    const maySpeak = !this.metadata.speechPrev && surroundingEntities.some(cell => cell && cell.constructor.name === 'NPC');
 
-    const formattedSurroundings = `To your front is ${surroundings[0]}.\nTo your back is ${surroundings[1]}.\nTo your left is ${surroundings[2]}.\nTo your right is ${surroundings[3]}.`;
+    let formattedSurroundings = `To your front is ${surroundings[0]}.\nTo your back is ${surroundings[1]}.\nTo your left is ${surroundings[2]}.\nTo your right is ${surroundings[3]}.\n`;
+
+    const otherNPCs = this.world.cells.flat().filter(cell => cell && cell.constructor.name === 'NPC' && cell !== this);
+    for (const npc of otherNPCs) {
+      formattedSurroundings += `\n${npc.label} is ${Math.abs(npc.x - this.x)} cells to your ${npc.x < this.x ? 'left' : 'right'} and ${Math.abs(npc.y - this.y)} cells to your ${npc.y < this.y ? 'front' : 'back'}.`
+    }
 
     let formattedEvents = '';
     if (this.world.prevEvents?.length) {
-      formattedEvents = 'Just now:\n';
+      formattedEvents = 'In the previous round:\n';
       for (const event of this.world.prevEvents)
         formattedEvents += `  - ${event}\n`;
       formattedEvents += '\n';
     }
 
-    const functionCall = await prompt(
+    const surroundingEntitiesThatHaveSpoken = surroundingEntities.filter(cell => cell && cell.constructor.name === 'NPC' && cell.metadata.speechPrev);
+
+    let formattedSpeech = '';
+    if (surroundingEntitiesThatHaveSpoken.length) {
+      formattedSpeech = 'In the previous round:\n';
+      for (const entity of surroundingEntitiesThatHaveSpoken)
+        formattedSpeech += `  - ${entity.label} said "${entity.metadata.speechPrev}"\n`;
+      formattedSpeech += '\n';
+    }
+
+    const m = NPCfunctionsMap;
+
+    const capabilities = [
+      m.doNothing,
+      //m.remember,
+    ];
+
+    if (surroundingEntities[0] == null)
+      capabilities.push(m.stepForward);
+    if (surroundingEntities[1] == null)
+      capabilities.push(m.stepBackward);
+    if (surroundingEntities[2] == null)
+      capabilities.push(m.stepLeft);
+    if (surroundingEntities[3] == null)
+      capabilities.push(m.stepRight);
+
+    if (maySpeak)
+      capabilities.push(m.say);
+
+    let functionCall;
+    do {
+      functionCall = await prompt(
 `Your name is ${this.label}. You live on a 32x32 grid. Your current coordinates are (${this.x}, ${this.y}).
 
-${formattedMemory}The message from God is: "Make friends"
+${formattedMemory}Your goal is: "Walk to someone and have interesting conversations"
 
 You're currently carrying nothing.
 
 ${formattedSurroundings}
 
-${formattedEvents}You may only speak when next to someone. You MUST perform a single function in response to the above information.`
-    );
+${formattedEvents}${formattedSpeech}You MUST perform a single function in response to the above information.`,// Your memory is precious, so only remember important things others tell you.`,
+      capabilities);
 
-    this[functionCall.name](...Object.values(functionCall.arguments));
+      this[functionCall.name](...Object.values(functionCall.arguments));
 
-    if (functionCall.name === 'say')
-      return `${this.label} said: "${functionCall.arguments[0]}"`;
+      // if (functionCall.name === 'say')
+      //   return `${this.label} said: "${functionCall.arguments.text}"`;
 
-    //this.move(['up', 'down', 'left', 'right'][Math.floor(Math.random() * 4)]);
+      //this.move(['up', 'down', 'left', 'right'][Math.floor(Math.random() * 4)]);
+    } while (functionCall.name === 'remember');
   }
 
   doNothing() {
@@ -291,7 +367,10 @@ ${formattedEvents}You may only speak when next to someone. You MUST perform a si
   }
 
   say(text) {
-    console.log(this.label, 'saying', text);
+    this.metadata.speechCurr = text;
+    // colour output
+    console.log('\x1b[33m%s\x1b[0m', this.label + ':', text);
+    // console.log(this.label, 'saying', text);
   }
 
   stepForward() {

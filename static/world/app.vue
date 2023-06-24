@@ -30,6 +30,14 @@ export default {
       const res = await fetch('/world/tick');
       const data = await res.json();
       this.world = data;
+
+      for (const row of this.world.cells) {
+        for (const cell of row) {
+          if (cell?.className === 'NPC' && cell.metadata?.speechCurr) {
+            console.log(cell.label, 'said', cell.metadata.speechCurr);
+          }
+        }
+      }
     },
   },
   computed: {
