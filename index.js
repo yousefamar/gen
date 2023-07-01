@@ -1,8 +1,8 @@
-const fs = require('fs');
-const express = require('express');
-const { Configuration, OpenAIApi } = require("openai");
-const fetch = require('node-fetch');
-require('dotenv').config();
+import fs from 'fs';
+import express from 'express';
+import { Configuration, OpenAIApi } from "openai";
+import 'dotenv/config';
+import world from './routes/world.js';
 
 const dataDir = fs.existsSync('/data') ? '/data': './data';
 const rootDir = fs.existsSync('/data') ? '/' : '.';
@@ -57,7 +57,7 @@ if (!fs.existsSync(emojiCacheDir)) {
 
   app.use(express.static('static'));
 
-  app.use('/world', require('./routes/world'));
+  app.use('/world', world);
 
   app.get('/emoji/:name', async (req, res) => {
     const name = req.params.name;

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "doNothing",
+    "description": "Do nothing",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "remember",
+    "description": "Add facts about people to your long-term memory",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "fact": {
+          "type": "string",
+          "description": "The fact to remember"
+        }
+      },
+      "required": [
+        "fact"
+      ]
+    }
+  },
+  {
+    "name": "stepForward",
+    "description": "Step one cell forward (minus Y)",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "stepBackward",
+    "description": "Step one cell back (plus Y)",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "stepLeft",
+    "description": "Step one cell to the left (minus X)",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "stepRight",
+    "description": "Step one cell to the right (plus X)",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "say",
+    "description": "Say something short (one sentence)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The text to say"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+]
