@@ -95,6 +95,9 @@ ${formattedSurroundings}
 
 ${formattedEvents}${formattedSpeech}You MUST perform a single function in response to the above information.`,// Your memory is precious, so only remember important things others tell you.`,
       capabilities);
+       
+      if (!(functionCall?.name in NPCfunctionsMap))
+        break;
 
       this[functionCall.name](...Object.values(functionCall.arguments || []));
 
